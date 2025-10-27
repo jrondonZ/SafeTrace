@@ -1,0 +1,32 @@
+# SafeTrace (CT MVP — single-folder)
+Web-first MVP for local news & safety signals across all Connecticut municipalities.
+
+## What’s here
+- **One FastAPI app** serving both the **API** and a **simple Mapbox UI**.
+- **PostGIS** storage; loaders + tasks to:
+  - Load **all 169 CT municipalities** (official CTDOT Open Data).
+  - Ingest **GDELT DOC 2.0** news for each town (last 24h).
+- API:
+  - `GET /api/municipalities` – polygons (GeoJSON) + metadata
+  - `GET /api/news?muni_id={id}` – news list by municipality
+- UI (/) – CT map; click a town to filter the feed.
+
+> Data sources:
+> - CT Municipalities Open Data (CTDOT layer) — public dataset for 169 towns.  
+> - GDELT DOC 2.0 API — JSON full-text news search (near-real-time).
+
+## Quick start
+```bash
+cp .env.example .env
+# put your Mapbox public token in MAPBOX_TOKEN
+
+docker compose up --build -d
+
+# Load all 169 CT towns (one-time / repeatable)
+curl -X POST http://localhost:8000/tasks/load_towns
+
+# Ingest last-24h news for each CT town (can re-run)
+curl -X POST http://localhost:8000/tasks/ingest_gdelt
+
+# Open UI
+open http://localhost:8000
