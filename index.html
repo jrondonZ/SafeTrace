@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>SafeTrace — Connecticut</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  ./styles.css
+  <!-- D3 & TopoJSON (only D3 needed if we use raw GeoJSON) -->
+  https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js</script>
+</head>
+<body>
+  <header>
+    <h1>SafeTrace — Connecticut</h1>
+    <div class="sub">Local news, safety signals, and resources for CT communities</div>
+  </header>
+
+  <main>
+    <section class="map-panel">
+      <div id="map"></div>
+      <div class="controls">
+        <button id="btnLocate">Use My Location</button>
+        <select id="townSelect"></select>
+      </div>
+    </section>
+
+    <section class="info-panel">
+      <div class="card">
+        <h2>Local Headlines</h2>
+        <div id="newsList" class="list"></div>
+      </div>
+
+      <div class="card">
+        <h2>Child Safety & Offender Resources</h2>
+        <ul class="links">
+          <li><a id="nsopwLink" target="_blank" rel="noopener">Search registered offenders near this town (NSOPW)</a></li>
+          <li>https://takeitdown.ncmec.org/NCMEC — Take It Down (remove intimate images/CSAM)</a></li>
+        </ul>
+        <div class="note">
+          We deep-link to the official registry. Do not harass or misuse information; follow all CT/NSOPW guidance.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Emergency & Local Help</h2>
+        <div class="quick-actions">
+          tel:911Call 911</a>
+          https://www.211ct.org/CT 2-1-1 (Local Help)</a>
+          <a class="btn" id="pdLink" target="_blank" rel="noopener">Local Police (site)</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>About the data</h2>
+        <ul class="note">
+          <li>Town boundaries: CT Geodata / CTDOT Municipalities (169 towns).</li>
+          <li>Headlines: GDELT DOC 2.0 (near real-time JSON).</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div>© SafeTrace — MVP. Sources: CT Geodata/CTDOT, GDELT. </div>
+  </footer>
+
+  ./app.js</script>
+</body>
+</html>
