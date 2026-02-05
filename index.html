@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8"/>
+  <title>SafeTrace — Connecticut</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+  <!-- D3 (v7) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js" defer></script>
+
+  <style>
+    :root{
+      --bg:#0b1020; --panel:#0f172a; --card:#111827; --glass:rgba(255,255,255,.06);
+      --text:#e5e7eb; --sub:#94a3b8; --muted:#9ca3af; --border:#27324a;
+      --pri:#7c3aed; --pri-2:#4f46e5; --pri-ink:#c7d2fe; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444;
+      --chip:#1f2937; --chip-b:#334155;
+      --shadow:0 8px 24px rgba(2,6,23,.35), inset 0 1px 0 rgba(255,255,255,.03);
+      --radius:14px;
+      --grad: radial-gradient(1200px 500px at 15% -10%, rgba(124,58,237,.25), transparent 60%),
+              radial-gradient(1200px 500px at 95% -20%, rgba(79,70,229,.2), transparent 60%),
+              linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0));
+    }
+    [data-theme="light"]{
+      --bg:#f8fafc; --panel:#eef2ff; --card:#ffffff; --glass:rgba(0,0,0,.04);
+      --text:#0f172a; --sub:#334155; --muted:#475569; --border:#e2e8f0;
+      --pri:#4f46e5; --pri-2:#7c3aed; --pri-ink:#312e81; --chip:#eef2ff; --chip-b:#c7d2fe;
+      --shadow:0 8px 24px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.7);
+      --grad: radial-gradient(1200px 500px at 10% -10%, rgba(79,70,229,.18), transparent 60%),
+              radial-gradient(1200px 500px at 90% -20%, rgba(124,58,237,.15), transparent 60%),
+              linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.6));
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;font:14.5px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color:var(--text);
+      background:var(--bg);
+      background-image:var(--grad);
+      background-attachment:fixed;
+    }
+
+    /* Header */
+    header{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:14px 18px;border-bottom:1px solid var(--border);
+      backdrop-filter:saturate(160%) blur(8px); background:var(--glass);
+      position:sticky;top:0;z-index:10;
+    }
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{
+      width:34px;height:34px;border-radius:10px;
+      background:conic-gradient(from 210deg, var(--pri), var(--pri-2));
+      box-shadow:var(--shadow)
+    }
+    h1{margin:0;font-size:18px;font-weight:700;letter-spacing:.2px}
+    .sub{color:var(--sub);font-size:12px}
+    .tog{
+      display:flex;gap:8px;align-items:center;
+    }
+    .btn{
+      padding:8px 10px;border:1px solid var(--border);border-radius:10px;cursor:pointer;
+      background:var(--card);color:var(--text);box-shadow:var(--shadow)
+    }
+    .btn.pri{background:linear-gradient(120deg, var(--pri), var(--pri-2)); color:#fff; border-color:transparent}
+    .btn.ghost{background:transparent}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+
+    /* Layout */
+    main{display:grid;grid-template-columns:1.6fr 1fr;min-height:calc(100vh - 62px);gap:14px;padding:14px}
+    @media (max-width: 1080px){ main{grid-template-columns:1fr} }
+
+    /* Map Panel */
+    .map-wrap{
+      position:relative;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--panel);box-shadow:var(--shadow);
+      min-height:520px;
+    }
+    #map{width:100%;height:100%}
+    .controls{
+      position:absolute;top:10px;left:10px;display:flex;gap:8px;flex-wrap:wrap;
+    }
+    .controls .btn, .controls select, .controls input[type="search"]{
+      border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text);
+    }
+    .controls select, .controls input[type="search"]{padding:8px 10px}
+    .zoom-stack{position:absolute; right:10px; top:10px; display:flex; flex-direction:column; gap:8px}
+    .legend{
+      position:absolute; bottom:10px; right:10px; background:var(--glass);
+      border:1px solid var(--border); border-radius:12px; padding:10px 12px; font-size:12px; color:var(--muted);
+      backdrop-filter:saturate(160%) blur(8px);
+    }
+    .tooltip{
+      position:absolute;pointer-events:none;background:rgba(0,0,0,.8);color:#fff;padding:6px 8px;border-radius:8px;font-size:12px;
+      transform:translate(-50%, -130%);white-space:nowrap;opacity:0;transition:opacity .15s;
+    }
+    .spinner{
+      position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;
+    }
+    .spin{width:36px;height:36px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:sp 0.9s linear infinite}
+    @keyframes sp{to{transform:rotate(1turn)}}
+
+    /* Right Panel */
+    .panel{display:flex;flex-direction:column;gap:14px}
+    .card{
+      background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+      padding:14px;box-shadow:var(--shadow)
+    }
+    .card h2{margin:0 0 10px;font-size:15px}
+    .note{color:var(--muted);font-size:12px}
+    .err{color:#fff;background:#7f1d1d;border:1px solid #ef4444;padding:8px;border-radius:10px}
+    .list a.item{display:block;padding:10px;border:1px solid var(--border);border-radius:12px;margin:8px 0;text-decoration:none;color:var(--text);background:var(--panel)}
+    .list a.item:hover{filter:brightness(1.06)}
+    .meta{color:var(--muted);font-size:12px;margin-bottom:4px}
+    .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+    .chip{background:var(--chip);border:1px solid var(--chip-b);color:var(--text);padding:2px 8px;border-radius:999px;font-size:11px}
+
+    .sparkline{height:46px}
+    .links li{margin:6px 0}
+
+    footer{padding:10px 16px;color:var(--muted);font-size:12px;text-align:center}
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1>SafeTrace — Connecticut</h1>
+        <div class="sub">Local news, safety signals, and resources</div>
+      </div>
+    </div>
+    <div class="tog">
+      <button class="btn ghost" id="themeBtn" title="Toggle light/dark">🌙</button>
+      <a class="btn" href="https://www.211ct.org/" target="_blank" rel="noopener">CT 2‑1‑1</a>
+      <a class="btn pri" href="tel:911">Call 911</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- MAP -->
+    <section class="map-wrap" aria-label="Connecticut map">
+      <div id="map"></div>
+      <div class="controls" role="group" aria-label="Map controls">
+        <button id="locBtn" class="btn" title="Center to my location">📍 My Location</button>
+        <input id="searchTown" type="search" placeholder="Search town…" aria-label="Search town"/>
+        <select id="townSel" aria-label="Choose a town"></select>
+        <button id="resetBtn" class="btn" title="Reset zoom">Reset</button>
+      </div>
+      <div class="zoom-stack">
+        <button id="zin" class="btn">＋</button>
+        <button id="zout" class="btn">－</button>
+      </div>
+      <div class="legend">Click a town to focus • Drag to pan • Scroll/pinch to zoom</div>
+      <div id="tooltip" class="tooltip"></div>
+      <div id="spin" class="spinner" aria-hidden="true"><div class="spin"></div></div>
+    </section>
+
+    <!-- RIGHT PANEL -->
+    <section class="panel" aria-label="Info">
+      <div class="card">
+        <h2>Local Headlines</h2>
+        <div id="newsList" class="list"></div>
+        <div id="spark" class="sparkline"></div>
+      </div>
+
+      <div class="card">
+        <h2>Child Safety & Offender Resources</h2>
+        <ul class="links">
+          <li><a id="nsopwLink" target="_blank" rel="noopener">Search registered offenders near this town (NSOPW)</a></li>
+          <li><a href="https://takeitdown.ncmec.org/" target="_blank" rel="noopener">NCMEC — Take It Down (remove intimate images / CSAM)</a></li>
+        </ul>
+        <div class="note">We deep‑link to the official registry. Do not harass or misuse information; follow CT/NSOPW guidance.</div>
+      </div>
+
+      <div class="card">
+        <h2>Emergency & Local Help</h2>
+        <div class="links">
+          <a id="pdLink" class="btn" target="_blank" rel="noopener">Local Police (website)</a>
+          <a class="btn" href="https://www.211ct.org/" target="_blank" rel="noopener">CT 2‑1‑1</a>
+          <a class="btn pri" href="tel:911">Call 911</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>About</h2>
+        <div class="note">
+          Town boundaries from CT Geodata / CTDOT Municipalities (169 towns). Headlines via GDELT DOC 2.0 (near real‑time JSON). <!-- sources cited in the chat -->
+        </div>
+      </div>
+
+      <div id="errBox" class="card" style="display:none">
+        <h2>Load Error</h2>
+        <div id="errMsg" class="err"></div>
+        <div style="margin-top:8px"><button id="retry" class="btn">Retry</button></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>© SafeTrace — MVP</footer>
+
+  <script>
+  // ----------------------------- Config -----------------------------
+  const CT_MUNICIPALITIES_GEOJSON =
+    "https://services.arcgis.com/OKt1GlOQ0VQ53M2G/arcgis/rest/services/CTDOT_Municipalities/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson"; // CTDOT Open Data (169 towns)
+  const LOCAL_TOWNS_FALLBACK = "./ct-towns.json"; // optional local fallback: save the GeoJSON as this filename
+  const GDELT_DOC_API = "https://api.gdeltproject.org/api/v2/doc/doc"; // DOC 2.0 (JSON)
+
+  // ----------------------------- State ------------------------------
+  let townsFC = null;
+  let selectedTown = null;
+
+  // Theme toggle
+  const themeBtn = document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', () => {
+    const root = document.documentElement;
+    const isLight = root.getAttribute('data-theme') === 'light';
+    root.setAttribute('data-theme', isLight ? 'dark' : 'light');
+    themeBtn.textContent = isLight ? '🌞' : '🌙';
+  });
+
+  // --------------------------- D3 Map Init --------------------------
+  const mapEl = document.getElementById('map');
+  const width = mapEl.clientWidth, height = Math.max(mapEl.clientHeight, 520);
+  const svg = d3.select('#map').append('svg').attr('width', width).attr('height', height);
+  const g = svg.append('g');
+  const projection = d3.geoMercator();
+  const path = d3.geoPath(projection);
+  const zoom = d3.zoom().scaleExtent([1, 18]).on('zoom', (ev)=> g.attr('transform', ev.transform));
+  svg.call(zoom);
+
+  // Controls
+  const zin = document.getElementById('zin');
+  const zout = document.getElementById('zout');
+  zin.onclick = () => svg.transition().duration(300).call(zoom.scaleBy, 1.25);
+  zout.onclick = () => svg.transition().duration(300).call(zoom.scaleBy, 0.8);
+  document.getElementById('resetBtn').onclick = () => svg.transition().duration(600).call(zoom.transform, d3.zoomIdentity);
+
+  const tooltip = document.getElementById('tooltip');
+  const spin = document.getElementById('spin');
+  const errBox = document.getElementById('errBox');
+  const errMsg = document.getElementById('errMsg');
+  const retry = document.getElementById('retry');
+  retry.onclick = () => { hideError(); boot(); };
+
+  // Load
+  boot();
+  window.addEventListener('resize', () => location.reload()); // simple MVP behavior
+
+  async function boot(){
+    showSpinner(true);
+    try{
+      townsFC = await fetchTowns();
+      fitProjection(townsFC);
+      renderTowns();
+      initPicker();
+      // Default town
+      const def = townsFC.features.find(f => f.properties.Municipality === 'New Haven');
+      if (def) focusTown(def, {animate:false});
+    }catch(e){
+      showError("Could not load CT towns. " + e.message + " (Try refresh or add a local ct-towns.json.)");
+      console.error(e);
+    }finally{
+      showSpinner(false);
+    }
+  }
+
+  async function fetchTowns(){
+    try{
+      const res = await fetch(CT_MUNICIPALITIES_GEOJSON, {mode:'cors'});
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      const j = await res.json();
+      if(!j.features) throw new Error("Unexpected response");
+      return j;
+    }catch(e){
+      // Fallback to local
+      try{
+        const r2 = await fetch(LOCAL_TOWNS_FALLBACK);
+        if(!r2.ok) throw new Error("Fallback not found");
+        const j2 = await r2.json();
+        if(!j2.features) throw new Error("Invalid fallback");
+        return j2;
+      }catch(e2){
+        throw e;
+      }
+    }
+  }
+
+  function fitProjection(fc){
+    const b = d3.geoBounds(fc);
+    const dx = b[1][0]-b[0][0], dy = b[1][1]-b[0][1];
+    const cx = (b[0][0]+b[1][0])/2, cy = (b[0][1]+b[1][1])/2;
+    const s = Math.min(width/dx/1.5, height/dy/1.5) * 100;
+    projection.scale(s).center([cx,cy]).translate([width/2, height/2]);
+  }
+
+  function renderTowns(){
+    g.selectAll('path.town')
+      .data(townsFC.features)
+      .join('path')
+      .attr('class','town')
+      .attr('d', path)
+      .attr('fill','url(#fillGrad)')
+      .attr('fill-opacity', 0.18)
+      .attr('stroke','#7c3aed')
+      .attr('stroke-opacity', .55)
+      .attr('stroke-width', .9)
+      .on('mousemove', (ev,d)=> showTip(ev, `${d.properties.Municipality} — ${d.properties.County} County`))
+      .on('mouseleave', hideTip)
+      .on('click', (_,d)=> focusTown(d));
+
+    // nice gradient fill
+    const defs = svg.append('defs');
+    const grad = defs.append('linearGradient')
+      .attr('id','fillGrad').attr('x1','0%').attr('x2','100%').attr('y1','0%').attr('y2','100%');
+    grad.append('stop').attr('offset','0%').attr('stop-color','#7c3aed');
+    grad.append('stop').attr('offset','100%').attr('stop-color','#4f46e5');
+  }
+
+  function initPicker(){
+    const sel = document.getElementById('townSel');
+    const src = townsFC.features.map(f => f.properties.Municipality).sort((a,b)=>a.localeCompare(b));
+    src.forEach(n => { const o = document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+    sel.onchange = (e)=> {
+      const f = townsFC.features.find(f => f.properties.Municipality === e.target.value);
+      if (f) focusTown(f);
+    };
+    document.getElementById('searchTown').oninput = (e)=>{
+      const q = e.target.value.toLowerCase();
+      Array.from(sel.options).forEach(o => o.hidden = !o.value.toLowerCase().includes(q));
+    };
+    document.getElementById('locBtn').onclick = geolocate;
+  }
+
+  function focusTown(feature, {animate=true}={}){
+    selectedTown = feature;
+    // Highlight
+    g.selectAll('path.town')
+      .attr('fill-opacity', d => d===feature ? 0.32 : 0.12)
+      .attr('stroke-opacity', d => d===feature ? 0.9 : 0.55);
+
+    // Zoom to town
+    const b = path.bounds(feature);
+    const dx = b[1][0]-b[0][0], dy = b[1][1]-b[0][1];
+    const x = (b[0][0]+b[1][0])/2, y = (b[0][1]+b[1][1])/2;
+    const s = 0.9 / Math.max(dx/width, dy/height);
+    const t = d3.zoomIdentity.translate(width/2 - s*x, height/2 - s*y).scale(s);
+    (animate ? svg.transition().duration(600) : svg).call(zoom.transform, t);
+
+    // Update UI
+    updateNsopwLink(feature);
+    updatePoliceLink(feature);
+    fetchTownNews(feature);
+
+    // sync dropdown
+    document.getElementById('townSel').value = feature.properties.Municipality;
+  }
+
+  function geolocate(){
+    if(!navigator.geolocation){ alert("Geolocation not supported."); return; }
+    navigator.geolocation.getCurrentPosition((pos)=>{
+      const pt = [pos.coords.longitude, pos.coords.latitude];
+      const f = townsFC.features.find(f => d3.geoContains(f, pt));
+      if (f) focusTown(f); else alert("Couldn't match your location to a CT town.");
+    }, (err)=>{
+      alert("Location error: " + err.message + "\n(Use HTTPS or http://localhost)");
+    }, {enableHighAccuracy:true, timeout:8000});
+  }
+
+  function updateNsopwLink(feature){
+    const a = document.getElementById('nsopwLink');
+    a.href = "https://www.nsopw.gov/";
+    a.textContent = `Search registered offenders near ${feature.properties.Municipality} on NSOPW`;
+  }
+  function updatePoliceLink(feature){
+    const q = feature.properties.Municipality + " CT police";
+    const a = document.getElementById('pdLink');
+    a.href = "https://www.google.com/search?q=" + encodeURIComponent(q);
+  }
+
+  async function fetchTownNews(feature){
+    const list = document.getElementById('newsList');
+    list.innerHTML = "<div class='note'>Loading…</div>";
+    const params = new URLSearchParams({
+      query: `"${feature.properties.Municipality}, Connecticut"`,
+      timespan: "24h",
+      format: "json",
+      maxrecords: "50"
+    });
+    try{
+      const r = await fetch(`${GDELT_DOC_API}?${params.toString()}`);
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      const data = await r.json();
+      const items = data.articles || data.documents || [];
+      renderNews(items);
+      renderSparkline(items);
+    }catch(e){
+      console.error(e);
+      list.innerHTML = "<div class='err'>Could not load news. Try again shortly.</div>";
+      renderSparkline([]); // clear spark
+    }
+  }
+
+  function renderNews(items){
+    const list = document.getElementById('newsList');
+    list.innerHTML = "";
+    if(!items.length){ list.innerHTML = "<div class='note'>No recent headlines for this town.</div>"; return; }
+
+    items.slice(0, 20).forEach(a=>{
+      const url = a.url || a.SOURCEURL;
+      const title = a.title || a.TITLE || "(untitled)";
+      const when = a.seendate || a.DATE;
+      const timeStr = when ? new Date(when).toLocaleString() : "";
+
+      const el = document.createElement('a');
+      el.className = "item"; el.href = url; el.target="_blank"; el.rel="noopener";
+      el.innerHTML = `
+        <div class="meta">${timeStr}</div>
+        <div class="ttl">${title}</div>
+        <div class="chips">
+          <span class="chip">news</span>
+          <span class="chip">${selectedTown?.properties?.Municipality || ""}</span>
+        </div>`;
+      list.appendChild(el);
+    });
+  }
+
+  // Mini D3 sparkline of article counts by hour (last 24h)
+  function renderSparkline(items){
+    const box = d3.select('#spark');
+    box.selectAll("*").remove();
+    const w = box.node().clientWidth || 320, h = 46, m = {t:6,r:6,b:6,l:6};
+    const svgS = box.append('svg').attr('width', w).attr('height', h);
+    const gS = svgS.append('g').attr('transform', `translate(${m.l},${m.t})`);
+    const W = w - m.l - m.r, H = h - m.t - m.b;
+
+    const times = items
+      .map(d => new Date(d.seendate || d.DATE))
+      .filter(d => !isNaN(d))
+      .sort((a,b)=>a-b);
+
+    if(!times.length){
+      gS.append('text').attr('x',4).attr('y',H/2+4).attr('fill','var(--muted)').attr('font-size',12).text('No activity last 24h');
+      return;
+    }
+
+    // Bucket by hour
+    const now = Date.now();
+    const bins = Array.from({length:24}, (_,i)=>({t: now - (23-i)*3600e3, c:0}));
+    times.forEach(ts=>{
+      const diffH = Math.floor((now - ts.getTime()) / 3600e3);
+      const idx = 23 - diffH;
+      if (idx >=0 && idx < 24) bins[idx].c++;
+    });
+
+    const x = d3.scaleLinear().domain([0,23]).range([0,W]);
+    const y = d3.scaleLinear().domain([0, d3.max(bins,d=>d.c)||1]).nice().range([H, 8]);
+
+    const line = d3.line()
+      .x((_,i)=> x(i))
+      .y(d => y(d.c))
+      .curve(d3.curveMonotoneX);
+
+    gS.append('path')
+      .datum(bins)
+      .attr('d', line)
+      .attr('fill','none')
+      .attr('stroke','var(--pri)')
+      .attr('stroke-width',2);
+
+    // gentle gradient under area (nice effect)
+    const defs = svgS.append('defs');
+    const grad = defs.append('linearGradient').attr('id','sg').attr('x1','0').attr('x2','0').attr('y1','0').attr('y2','1');
+    grad.append('stop').attr('offset','0%').attr('stop-color','var(--pri)').attr('stop-opacity',.35);
+    grad.append('stop').attr('offset','100%').attr('stop-color','var(--pri)').attr('stop-opacity',0);
+
+    const area = d3.area()
+      .x((_,i)=> x(i))
+      .y0(H)
+      .y1(d => y(d.c))
+      .curve(d3.curveMonotoneX);
+
+    gS.insert('path', ':first-child')
+      .datum(bins)
+      .attr('d', area)
+      .attr('fill','url(#sg)');
+  }
+
+  function showTip(ev, text){
+    tooltip.textContent = text;
+    const r = mapEl.getBoundingClientRect();
+    tooltip.style.left = (ev.clientX - r.left) + "px";
+    tooltip.style.top = (ev.clientY - r.top) + "px";
+    tooltip.style.opacity = "1";
+  }
+  function hideTip(){ tooltip.style.opacity = "0"; }
+  function showSpinner(on){ spin.style.display = on ? 'flex' : 'none'; }
+  function showError(msg){ errMsg.textContent = msg; errBox.style.display='block'; }
+  function hideError(){ errBox.style.display='none'; }
+  </script>
+</body>
+</html>
